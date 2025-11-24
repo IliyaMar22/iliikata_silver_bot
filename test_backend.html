@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head><title>Backend Test</title></head>
+<body>
+<h1>Backend Connection Test</h1>
+<button onclick="test()">Test Backend</button>
+<div id="result" style="margin-top:20px; padding:10px; border:1px solid #ccc;"></div>
+<script>
+async function test() {
+  const result = document.getElementById('result');
+  result.innerHTML = 'Testing...<br>';
+  
+  try {
+    const response = await fetch('http://localhost:8342/api/health');
+    const data = await response.json();
+    result.innerHTML = '✅ SUCCESS!<br><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+  } catch (error) {
+    result.innerHTML = '❌ ERROR:<br>' + error.message + '<br><br>This means Safari cannot reach the backend.';
+  }
+}
+</script>
+</body>
+</html>
