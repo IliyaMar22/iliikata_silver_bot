@@ -92,46 +92,62 @@ manager = ConnectionManager()
 
 
 async def refresh_state() -> None:
-    logger.info("Refreshing silver market state...")
-    positions_task = asyncio.create_task(engine.analyze_all())
-    spot_task = asyncio.create_task(market_service.fetch_spot_prices())
-    intraday_task = asyncio.create_task(market_service.get_intraday_snapshot())
-
-    positions = await positions_task
-    spot_prices = await spot_task
-    intraday = await intraday_task
-    spot_prices["intraday"] = intraday
-
-    state.positions = positions
-    state.spot_prices = spot_prices
-    state.last_update = datetime.now(timezone.utc).isoformat()
-
-    snapshot = {
-        "spot": spot_prices,
-        "best_signal": _best_position(positions),
-        "timeframes": {p["timeframe"]: {"score": p["score"], "action": p["action"]} for p in positions},
-        "timestamp": state.last_update,
-    }
-
-    # Try to get Claude summary, but don't block if it fails or times out
     try:
-        state.summary = await asyncio.wait_for(claude.summarize(snapshot), timeout=30.0)
-    except asyncio.TimeoutError:
-        logger.warning("Claude summary timed out, using fallback")
-        state.summary = {
-            "status": "ok",
-            "headline": "Market Summary",
-            "body": "Silver market data is being analyzed. Summary will be available shortly.",
+        logger.info("Refreshing silver market state...")
+        positions_task = asyncio.create_task(engine.analyze_all())
+        spot_task = asyncio.create_task(market_service.fetch_spot_prices())
+        intraday_task = asyncio.create_task(market_service.get_intraday_snapshot())
+
+        positions = await positions_task
+        spot_prices = await spot_task
+        intraday = await intraday_task
+        spot_prices["intraday"] = intraday
+
+        state.positions = positions
+        state.spot_prices = spot_prices
+        state.last_update = datetime.now(timezone.utc).isoformat()
+
+        snapshot = {
+            "spot": spot_prices,
+            "best_signal": _best_position(positions),
+            "timeframes": {p["timeframe"]: {"score": p["score"], "action": p["action"]} for p in positions},
+            "timestamp": state.last_update,
         }
+
+        # Try to get Claude summary, but don't block if it fails or times out
+        try:
+            state.summary = await asyncio.wait_for(claude.summarize(snapshot), timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.warning("Claude summary timed out, using fallback")
+            state.summary = {
+                "status": "ok",
+                "headline": "Market Summary",
+                "body": "Silver market data is being analyzed. Summary will be available shortly.",
+            }
+        except Exception as exc:
+            logger.error("Claude summary failed: %s", exc)
+            state.summary = {
+                "status": "ok",
+                "headline": "Market Summary",
+                "body": "Silver market data is being analyzed. Summary will be available shortly.",
+            }
+        
+        logger.info("State refresh complete (%s positions)", len(positions))
     except Exception as exc:
-        logger.error("Claude summary failed: %s", exc)
-        state.summary = {
-            "status": "ok",
-            "headline": "Market Summary",
-            "body": "Silver market data is being analyzed. Summary will be available shortly.",
-        }
-    
-    logger.info("State refresh complete (%s positions)", len(positions))
+        logger.error("Error in refresh_state: %s", exc, exc_info=True)
+        # Set minimal state so app doesn't crash
+        if not state.last_update:
+            state.last_update = datetime.now(timezone.utc).isoformat()
+        if not state.spot_prices:
+            state.spot_prices = {"average": 0.0, "sources": {}}
+        if not state.positions:
+            state.positions = []
+        if not state.summary:
+            state.summary = {
+                "status": "error",
+                "headline": "Initializing",
+                "body": "Loading market data...",
+            }
 
 
 async def refresh_loop() -> None:
@@ -207,11 +223,13 @@ async def root() -> Any:
         return FileResponse(index_path)
     return {
         "message": "Iliicheto Silver Fetch API",
+        "status": "running",
         "endpoints": [
             "/api/positions",
             "/api/current-price",
             "/api/fear-greed",
             "/api/summary",
+            "/api/health",
             "/ws",
         ],
     }
@@ -286,10 +304,14 @@ async def get_summary() -> Any:
 
 @app.get("/api/health")
 async def health() -> Any:
+    """Health check endpoint for Railway"""
     return {
         "status": "healthy",
-        "timestamp": state.last_update,
+        "service": "Iliicheto Silver Fetch",
+        "timestamp": state.last_update or datetime.now(timezone.utc).isoformat(),
         "connections": len(manager.active_connections),
+        "has_data": bool(state.positions),
+        "environment": settings.environment,
     }
 
 
