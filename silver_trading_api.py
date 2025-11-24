@@ -151,18 +151,24 @@ async def refresh_state() -> None:
 
 
 async def refresh_loop() -> None:
-    await refresh_state()
-    await manager.broadcast(
-        {
-            "type": "update",
-            "timestamp": state.last_update,
-            "positions": state.positions,
-            "current_price": state.spot_prices.get("average"),
-            "spot_prices": state.spot_prices,
-            "summary": state.summary,
-            "fear_greed": _derive_sentiment(),
-        }
-    )
+    # Initial refresh - don't block if it fails
+    try:
+        await refresh_state()
+        await manager.broadcast(
+            {
+                "type": "update",
+                "timestamp": state.last_update,
+                "positions": _convert_numpy_types(state.positions),
+                "current_price": state.spot_prices.get("average"),
+                "spot_prices": _convert_numpy_types(state.spot_prices),
+                "summary": _convert_numpy_types(state.summary),
+                "fear_greed": _convert_numpy_types(_derive_sentiment()),
+            }
+        )
+    except Exception as exc:
+        logger.error("Initial refresh failed (will retry): %s", exc, exc_info=True)
+    
+    # Continuous refresh loop
     while True:
         try:
             await refresh_state()
@@ -170,11 +176,11 @@ async def refresh_loop() -> None:
                 {
                     "type": "update",
                     "timestamp": state.last_update,
-                    "positions": state.positions,
+                    "positions": _convert_numpy_types(state.positions),
                     "current_price": state.spot_prices.get("average"),
-                    "spot_prices": state.spot_prices,
-                    "summary": state.summary,
-                    "fear_greed": _derive_sentiment(),
+                    "spot_prices": _convert_numpy_types(state.spot_prices),
+                    "summary": _convert_numpy_types(state.summary),
+                    "fear_greed": _convert_numpy_types(_derive_sentiment()),
                 }
             )
         except Exception as exc:  # noqa: BLE001
