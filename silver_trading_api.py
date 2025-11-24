@@ -210,10 +210,20 @@ def _convert_numpy_types(obj: Any) -> Any:
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    logger.info("Starting refresh loop...")
-    # Start the refresh loop in background (non-blocking)
-    # This allows the server to respond to requests immediately
-    asyncio.create_task(refresh_loop())
+    logger.info("🚀 Starting Iliicheto Silver Fetch...")
+    logger.info("Environment: %s", settings.environment)
+    logger.info("Port: %s", os.getenv("PORT", "8000"))
+    
+    # Initialize services gracefully - don't crash if they fail
+    try:
+        logger.info("Initializing services...")
+        # Start refresh loop in background - don't block startup
+        asyncio.create_task(refresh_loop())
+        logger.info("✅ Services initialized successfully")
+    except Exception as exc:
+        logger.error("❌ Startup error (continuing anyway): %s", exc, exc_info=True)
+        # Still start the loop - it will retry
+        asyncio.create_task(refresh_loop())
 
 
 @app.get("/")
