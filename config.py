@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 import os
@@ -42,7 +42,7 @@ class AppSettings:
     refresh_seconds: int = int(os.getenv("REFRESH_SECONDS", "60"))
     frontend_url: str | None = os.getenv("FRONTEND_URL")
     environment: str = os.getenv("ENVIRONMENT", "development")
-    claude: ClaudeSettings = ClaudeSettings()
+    claude: ClaudeSettings = field(default_factory=ClaudeSettings)
 
 
 @lru_cache
