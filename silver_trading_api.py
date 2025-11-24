@@ -245,31 +245,6 @@ async def on_startup() -> None:
         asyncio.create_task(refresh_loop())
 
 
-@app.get("/")
-async def root() -> Any:
-    index_path = FRONTEND_BUILD_DIR / "index.html"
-    logger.info("Root route called, checking index.html at: %s", index_path)
-    logger.info("Index exists: %s", index_path.exists())
-    if index_path.exists():
-        logger.info("Serving frontend index.html")
-        return FileResponse(index_path)
-    logger.warning("Frontend not found, returning API info")
-    return {
-        "message": "Iliicheto Silver Fetch API",
-        "status": "running",
-        "frontend_build_dir": str(FRONTEND_BUILD_DIR),
-        "frontend_exists": FRONTEND_BUILD_DIR.exists(),
-        "endpoints": [
-            "/api/positions",
-            "/api/current-price",
-            "/api/fear-greed",
-            "/api/summary",
-            "/api/health",
-            "/ws",
-        ],
-    }
-
-
 @app.get("/api/positions")
 async def get_positions() -> Any:
     return {
@@ -360,7 +335,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         manager.disconnect(websocket)
 
 
-# Mount static files if frontend is built
+# Mount static files and serve frontend if built
 if FRONTEND_BUILD_DIR.exists():
     static_dir = FRONTEND_BUILD_DIR / "static"
     if static_dir.exists():
@@ -369,26 +344,56 @@ if FRONTEND_BUILD_DIR.exists():
     else:
         logger.warning("Static directory not found: %s", static_dir)
     
-    # Catch-all route for frontend (must be last)
+    # Root route - serve index.html
+    @app.get("/")
+    async def root() -> Any:
+        index_path = FRONTEND_BUILD_DIR / "index.html"
+        logger.info("Root route: serving index.html from %s", index_path)
+        if index_path.exists():
+            return FileResponse(index_path)
+        return JSONResponse({"detail": "Frontend index.html not found"}, status_code=503)
+    
+    # Catch-all route for frontend SPA routing (must be last, after all API routes)
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str) -> Any:
-        # Don't catch API routes
+        logger.info("Catch-all route called with path: %s", full_path)
+        # Don't catch API routes (shouldn't happen, but safety check)
         if full_path.startswith("api") or full_path.startswith("ws"):
             return JSONResponse({"detail": "Not found"}, status_code=404)
         
-        # Try to serve the requested file, fallback to index.html for SPA routing
+        # Try to serve the requested file if it exists
         requested_path = FRONTEND_BUILD_DIR / full_path
         if requested_path.exists() and requested_path.is_file():
+            logger.info("Serving file: %s", requested_path)
             return FileResponse(requested_path)
         
-        # For SPA, serve index.html for all non-API routes
+        # For SPA routing, serve index.html for all non-API routes
         index_path = FRONTEND_BUILD_DIR / "index.html"
+        logger.info("SPA route: serving index.html for path: %s", full_path)
         if index_path.exists():
             return FileResponse(index_path)
         
         return JSONResponse({"detail": "Frontend not built"}, status_code=503)
 else:
     logger.warning("Frontend build directory does not exist: %s", FRONTEND_BUILD_DIR)
+    
+    # Fallback root route if frontend not built
+    @app.get("/")
+    async def root() -> Any:
+        return {
+            "message": "Iliicheto Silver Fetch API",
+            "status": "running",
+            "frontend_build_dir": str(FRONTEND_BUILD_DIR),
+            "frontend_exists": False,
+            "endpoints": [
+                "/api/positions",
+                "/api/current-price",
+                "/api/fear-greed",
+                "/api/summary",
+                "/api/health",
+                "/ws",
+            ],
+        }
 
 
 if __name__ == "__main__":
