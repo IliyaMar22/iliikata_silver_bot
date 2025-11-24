@@ -26,6 +26,24 @@ echo "🏗️ Building React app"
 npm run build
 cd ..
 
+echo ""
+echo "🔍 Verifying frontend build"
+if [ -d "silver-trading-frontend/build" ]; then
+    echo "✅ Frontend build directory exists"
+    if [ -f "silver-trading-frontend/build/index.html" ]; then
+        echo "✅ Frontend index.html exists"
+    else
+        echo "❌ Frontend index.html NOT found!"
+    fi
+    if [ -d "silver-trading-frontend/build/static" ]; then
+        echo "✅ Frontend static directory exists"
+    else
+        echo "❌ Frontend static directory NOT found!"
+    fi
+else
+    echo "❌ Frontend build directory NOT found!"
+fi
+
 echo "✅ Build finished"
 
 

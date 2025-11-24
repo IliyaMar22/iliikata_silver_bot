@@ -220,6 +220,19 @@ async def on_startup() -> None:
     logger.info("Environment: %s", settings.environment)
     logger.info("Port: %s", os.getenv("PORT", "8000"))
     
+    # Check frontend build directory
+    logger.info("Frontend build directory: %s", FRONTEND_BUILD_DIR)
+    logger.info("Frontend build exists: %s", FRONTEND_BUILD_DIR.exists())
+    if FRONTEND_BUILD_DIR.exists():
+        index_path = FRONTEND_BUILD_DIR / "index.html"
+        logger.info("Frontend index.html exists: %s", index_path.exists())
+        if (FRONTEND_BUILD_DIR / "static").exists():
+            logger.info("Frontend static directory exists: %s", (FRONTEND_BUILD_DIR / "static").exists())
+        else:
+            logger.warning("Frontend static directory NOT found!")
+    else:
+        logger.warning("Frontend build directory NOT found at: %s", FRONTEND_BUILD_DIR)
+    
     # Initialize services gracefully - don't crash if they fail
     try:
         logger.info("Initializing services...")
@@ -235,11 +248,17 @@ async def on_startup() -> None:
 @app.get("/")
 async def root() -> Any:
     index_path = FRONTEND_BUILD_DIR / "index.html"
+    logger.info("Root route called, checking index.html at: %s", index_path)
+    logger.info("Index exists: %s", index_path.exists())
     if index_path.exists():
+        logger.info("Serving frontend index.html")
         return FileResponse(index_path)
+    logger.warning("Frontend not found, returning API info")
     return {
         "message": "Iliicheto Silver Fetch API",
         "status": "running",
+        "frontend_build_dir": str(FRONTEND_BUILD_DIR),
+        "frontend_exists": FRONTEND_BUILD_DIR.exists(),
         "endpoints": [
             "/api/positions",
             "/api/current-price",
@@ -341,17 +360,35 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         manager.disconnect(websocket)
 
 
+# Mount static files if frontend is built
 if FRONTEND_BUILD_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_BUILD_DIR / "static")), name="static")
-
+    static_dir = FRONTEND_BUILD_DIR / "static"
+    if static_dir.exists():
+        logger.info("Mounting static files from: %s", static_dir)
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    else:
+        logger.warning("Static directory not found: %s", static_dir)
+    
+    # Catch-all route for frontend (must be last)
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str) -> Any:
-        if full_path.startswith("api"):
+        # Don't catch API routes
+        if full_path.startswith("api") or full_path.startswith("ws"):
             return JSONResponse({"detail": "Not found"}, status_code=404)
+        
+        # Try to serve the requested file, fallback to index.html for SPA routing
+        requested_path = FRONTEND_BUILD_DIR / full_path
+        if requested_path.exists() and requested_path.is_file():
+            return FileResponse(requested_path)
+        
+        # For SPA, serve index.html for all non-API routes
         index_path = FRONTEND_BUILD_DIR / "index.html"
         if index_path.exists():
             return FileResponse(index_path)
+        
         return JSONResponse({"detail": "Frontend not built"}, status_code=503)
+else:
+    logger.warning("Frontend build directory does not exist: %s", FRONTEND_BUILD_DIR)
 
 
 if __name__ == "__main__":
