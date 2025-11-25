@@ -70,3 +70,4 @@ Frontend loads data from `http://localhost:8123` and the websocket from `ws://lo
 
 The signals and summaries are educational examples, not financial advice. Always double-check levels with your own tooling before trading physical silver or derivatives.
 
+# Trigger redeploy Tue Nov 25 18:23:06 EET 2025
