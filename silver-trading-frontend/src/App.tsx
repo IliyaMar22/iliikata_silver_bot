@@ -102,8 +102,10 @@ function App() {
       setLoading(true);
       setError(null);
 
+      const resolvedBaseUrl =
+        API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8342');
       // Test connection first
-      const baseUrl = API_BASE_URL || 'http://127.0.0.1:8342';
+      const baseUrl = resolvedBaseUrl;
       console.log('🔍 Testing connection to:', baseUrl);
       try {
         const healthCheck = await axios.get(`${baseUrl}/api/health`, { timeout: 10000 });
@@ -147,7 +149,7 @@ function App() {
     } catch (err: any) {
       console.error('Error fetching data:', err);
       const errorMsg = err.response?.data?.error || err.message || 'Failed to fetch data';
-      console.error('API Base URL:', API_BASE_URL);
+      console.error('API Base URL:', API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : ''));
       console.error('Full error:', err);
       setError(`Network Error: ${errorMsg}. Check if backend is running on ${API_BASE_URL}`);
       setLoading(false);
