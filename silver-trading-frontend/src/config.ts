@@ -3,29 +3,32 @@
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
-const getWindowOrigin = () => {
-  if (typeof window !== 'undefined' && window.location) {
-    return window.location.origin;
+// Helper to get API base URL - use empty string for production (relative URLs)
+export const getApiBaseUrl = (): string => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
   }
+  if (isDevelopment) {
+    return 'http://127.0.0.1:8342';
+  }
+  // Production: use empty string for relative URLs (same origin)
   return '';
 };
 
-// For Railway deployment, frontend and backend are on the same domain
-// So we can use relative URLs in production
-const defaultApiBase = process.env.REACT_APP_API_URL ||
-  (isDevelopment ? 'http://127.0.0.1:8342' : getWindowOrigin());
-
-export const API_CONFIG = {
-  // Backend API URL
-  API_BASE_URL: defaultApiBase,
-  
-  // WebSocket URL
-  WS_URL: process.env.REACT_APP_WS_URL || 
-          (isDevelopment 
-            ? 'ws://127.0.0.1:8342/ws'  // WebSocket still needs full URL
-            : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`),  // Production: same host
+// Helper to get WebSocket URL
+export const getWsUrl = (): string => {
+  if (process.env.REACT_APP_WS_URL) {
+    return process.env.REACT_APP_WS_URL;
+  }
+  if (isDevelopment) {
+    return 'ws://127.0.0.1:8342/ws';
+  }
+  // Production: derive from current location
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws`;
 };
 
-// Export for easy access
-export const { API_BASE_URL, WS_URL } = API_CONFIG;
+// For backward compatibility - these are computed at runtime now
+export const API_BASE_URL = getApiBaseUrl();
+export const WS_URL = getWsUrl();
 

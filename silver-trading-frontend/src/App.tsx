@@ -102,17 +102,15 @@ function App() {
       setLoading(true);
       setError(null);
 
-      const resolvedBaseUrl =
-        API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8342');
-      // Test connection first
-      const baseUrl = resolvedBaseUrl;
-      console.log('🔍 Testing connection to:', baseUrl);
+      // In production, API_BASE_URL is empty string = relative URLs
+      const baseUrl = API_BASE_URL;
+      console.log('🔍 Testing connection to:', baseUrl || '(same origin)');
       try {
         const healthCheck = await axios.get(`${baseUrl}/api/health`, { timeout: 10000 });
         console.log('✅ Backend health check:', healthCheck.data);
       } catch (healthErr: any) {
         console.error('❌ Health check failed:', healthErr);
-        throw new Error(`Cannot connect to backend at ${baseUrl}. Error: ${healthErr.message}`);
+        throw new Error(`Cannot connect to backend. Error: ${healthErr.message}`);
       }
       const [positionsResponse, fgResponse, summaryResponse, spotResponse] = await Promise.all([
         axios.get(`${baseUrl}/api/positions`, { timeout: 15000 }),
@@ -151,7 +149,7 @@ function App() {
       const errorMsg = err.response?.data?.error || err.message || 'Failed to fetch data';
       console.error('API Base URL:', API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : ''));
       console.error('Full error:', err);
-      setError(`Network Error: ${errorMsg}. Check if backend is running on ${API_BASE_URL}`);
+      setError(`Network Error: ${errorMsg}. Backend may be starting up, please wait...`);
       setLoading(false);
     }
   }, []);
